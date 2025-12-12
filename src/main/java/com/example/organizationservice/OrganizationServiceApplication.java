@@ -1,4 +1,4 @@
-package com.organization.service;
+package com.example.organizationservice;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
