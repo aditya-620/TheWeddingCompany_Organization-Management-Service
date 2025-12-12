@@ -4,6 +4,10 @@
 
 **Purpose**: Multi-tenant Organization Management service. Creates organizations, admin users and dynamic tenant collections in MongoDB. Implements JWT admin login and tenant-scoped employee CRUD (role-based access control).
 
+### Documentation
+
+[View Additional Question Pdf](ADDITIONAL_QUESTION.pdf)
+
 ---
 
 ## How It Works (Architecture)
@@ -42,12 +46,26 @@ graph TD
 
 ---
 
+## Design Choices (Why I built it this way)
+
+- **Separation of global vs. tenant data**: A master database holds global metadata (organizations and admins), while each organization gets its own MongoDB collection. This keeps tenant data isolated and reduces the risk of cross-tenant mix-ups.
+
+- **Dynamic tenant collection creation**: When a new organization is created, a dedicated org_<name> collection is generated and pre-filled with a small template document so the structure is visible and consistent from the start.
+
+- **JWT-based authentication**: Admins receive a stateless JWT containing their admin ID, role, and organization name. Because the token carries the organization identifier, every request automatically knows which tenant it belongs to.
+
+- **Simple role-based access**: Only authenticated admins can perform sensitive actions like deleting an organization. This keeps the security model minimal but effective.
+
+- **Trade-offs**: Using one collection per tenant is great for clarity and isolation, but may not scale to thousands of organizations. JWT validation inside the app is fine for small systems but could be moved to an API gateway in a larger setup.
+
+---
+
 ## Getting Started
 
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/organization-service.git
+git clone https://github.com/aditya-620/TheWeddingCompany_Organization-Management-Service.git
 cd organization-service
 ```
 
@@ -82,43 +100,6 @@ mongosh --version   # if using mongosh
 * Authentication: Admin login returns a JWT token with claims: `sub` (adminId), `organization` and `role`.
 
 * Tenant APIs use the token's `organization` claim to route requests to the appropriate tenant collection.
-
----
-
-## Prerequisites
-
-Make sure you have the following installed:
-
-* Java 17+ (JDK 17 recommended)
-* Maven 3.6+
-* MongoDB (local) or Docker (to run MongoDB container)
-* (Optional) Postman for API testing
-
-Check versions:
-
-```bash
-java -version
-mvn -v
-mongosh --version   # if using mongosh
-```
-
----
-
-## Project structure (important files)
-
-```
-pom.xml
-src/main/java/com/example/organizationservice/
-  ├─ controller/
-  ├─ dto/
-  ├─ model/
-  ├─ repository/
-  ├─ security/
-  ├─ service/
-src/main/resources/application.properties
-README.md
-postman/OrganizationService.postman_collection.json (optional)
-```
 
 ---
 
@@ -214,36 +195,3 @@ Flow to test:
 5. `05 - Get Employee` / `06 - Update Employee` / `07 - Delete Employee`
 
 ---
-
-## Useful commands (quick reference)
-
-```bash
-# build
-mvn clean package
-
-# run
-mvn spring-boot:run
-
-# run on other port
-mvn spring-boot:run -Dserver.port=8081
-
-# build jar and run
-java -jar target/organization-service-0.0.1-SNAPSHOT.jar
-
-# run Mongo local via Docker
-docker run -d --name org-mongo -p 27017:27017 mongo:6
-
-# test login, save token (requires jq)
-TOKEN=$(curl -s -X POST http://localhost:8080/admin/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@microsoft.com","password":"Admin@1234"}' | jq -r .token)
-
-# use token
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/tenant/employees
-```
-
----
-
-## License
-
-This project is licensed under the MIT License.
