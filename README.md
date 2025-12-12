@@ -195,3 +195,29 @@ Flow to test:
 5. `05 - Get Employee` / `06 - Update Employee` / `07 - Delete Employee`
 
 ---
+
+## 📸 Project Screenshots
+
+### 1. Dynamic Multi-Tenant Collections (MongoDB)
+> This shows how a separate collection is created for each organization (e.g., `org_google`, `org_youtube`).
+> 
+![MongoDB Collections](./screenshots/mongo_collections.png)
+
+### 2. API Testing (Postman)
+
+**Create Organization:**
+![Create Org](./screenshots/postman_create.png)
+
+**Admin Login (JWT Token Generation):**
+![Admin Login](./screenshots/postman_admin_login.png)
+
+**Get Organization by Name**
+![Get Org](./screenshots/postman_get.png)
+
+**Update Organization (Renaming & Syncing):**
+![Update Org](./screenshots/postman_update.png)
+
+**Delete Organization**
+![Delete Org](./screenshots/postman_delete.png)
+
+---
