@@ -1,18 +1,30 @@
 package com.example.organizationservice.service;
 
-import com.example.organizationservice.model.OrganizationMetadata;
 import com.example.organizationservice.model.AdminUser;
+import com.example.organizationservice.model.OrganizationMetadata;
 import com.example.organizationservice.repository.AdminUserRepository;
 import com.example.organizationservice.repository.OrganizationMetadataRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.stereotype.Service;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.index.Index;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
+/**
+ * OrganizationService
+ *
+ * - Creates org metadata and admin in master collections.
+ * - Dynamically creates tenant collection named org_<sanitized_name>.
+ * - Inserts a basic template document into the tenant collection so it is NOT empty.
+ * - Inserts a lightweight admin profile document into the tenant collection (no password).
+ * - Optionally creates an index on adminEmail inside tenant collection.
+ *
+ * Note: This service uses MongoTemplate for dynamic collection operations.
+ */
 @Service
 public class OrganizationService {
 
@@ -37,12 +49,25 @@ public class OrganizationService {
         return "org_" + sanitizeName(organizationName);
     }
 
+    /**
+     * Create a new organization:
+     * - validate inputs
+     * - create admin in master_admins (password hashed)
+     * - create tenant collection org_<name>
+     * - insert a basic template doc into the tenant collection
+     * - insert an admin_profile doc into the tenant collection (no password)
+     * - save metadata to master_organizations
+     */
     public OrganizationMetadata createOrganization(String orgName, String email, String password) {
         if (orgName == null || orgName.isBlank()) throw new IllegalArgumentException("organization_name required");
+        if (email == null || email.isBlank()) throw new IllegalArgumentException("admin email required");
+        if (password == null || password.isBlank()) throw new IllegalArgumentException("admin password required");
+
+        // avoid duplicate admin email across master admin collection
         if (adminRepo.findByEmail(email).isPresent()) {
-            // avoid duplicate admin email across master admin collection
             throw new DuplicateKeyException("admin email already used");
         }
+        // avoid duplicate organization name
         if (orgRepo.existsByOrganizationName(orgName)) {
             throw new DuplicateKeyException("organization already exists");
         }
@@ -52,15 +77,53 @@ public class OrganizationService {
         admin.setEmail(email);
         admin.setPasswordHash(passwordEncoder.encode(password));
         admin.setOrganizationName(orgName);
+        // if AdminUser has role field, you can set it here, e.g. admin.setRole("ADMIN");
         AdminUser savedAdmin = adminRepo.save(admin);
 
         // create collection dynamically
         String collName = collectionNameForOrg(orgName);
         if (!mongoTemplate.collectionExists(collName)) {
             mongoTemplate.createCollection(collName);
+
+            // --- Insert basic template document (so collection is not empty) ---
+            Map<String, Object> basicSchema = new HashMap<>();
+            basicSchema.put("template", true);
+
+            Map<String, String> fields = new LinkedHashMap<>();
+            fields.put("name", "string");
+            fields.put("email", "string");
+            fields.put("position", "string");
+            fields.put("salary", "number");
+            fields.put("createdAt", "date");
+            fields.put("updatedAt", "date");
+
+            basicSchema.put("fields", fields);
+            basicSchema.put("createdAt", new Date());
+            basicSchema.put("description", "This is a template document describing the tenant 'Employee' schema. Remove if needed.");
+
+            mongoTemplate.insert(basicSchema, collName);
+
+            // --- Insert a lightweight admin profile document into tenant collection ---
+            Map<String, Object> adminProfile = new HashMap<>();
+            adminProfile.put("type", "admin_profile");
+            adminProfile.put("adminId", savedAdmin.getId());
+            adminProfile.put("adminEmail", savedAdmin.getEmail());
+            adminProfile.put("organizationName", orgName);
+            adminProfile.put("createdAt", new Date());
+
+            mongoTemplate.insert(adminProfile, collName);
+
+            // --- Create a helpful index on adminEmail inside tenant collection (optional) ---
+            try {
+                mongoTemplate.indexOps(collName)
+                        .ensureIndex(new Index().on("adminEmail", Sort.Direction.ASC));
+            } catch (Exception ex) {
+                // index creation failure should not block org creation; log if you have logger, otherwise ignore
+                // e.g., logger.warn("Could not create index on {}: {}", collName, ex.getMessage());
+            }
         }
 
-        // create metadata
+        // create metadata in master DB
         OrganizationMetadata meta = new OrganizationMetadata();
         meta.setOrganizationName(orgName);
         meta.setCollectionName(collName);
@@ -73,6 +136,10 @@ public class OrganizationService {
         return orgRepo.findByOrganizationName(orgName);
     }
 
+    /**
+     * Update organization name: create new tenant collection (if needed),
+     * copy documents from old collection to new collection, update admin references and metadata.
+     */
     public OrganizationMetadata updateOrganizationName(String currentName, String newName) {
         if (currentName == null || newName == null || newName.isBlank())
             throw new IllegalArgumentException("names required");
@@ -96,6 +163,21 @@ public class OrganizationService {
         List<?> docs = mongoTemplate.findAll(Object.class, oldColl);
         if (!docs.isEmpty()) {
             mongoTemplate.insert(docs, newColl);
+        } else {
+            // If old collection was empty, still insert a template into new collection so it's not empty
+            Map<String, Object> basicSchema = new HashMap<>();
+            basicSchema.put("template", true);
+            Map<String, String> fields = new LinkedHashMap<>();
+            fields.put("name", "string");
+            fields.put("email", "string");
+            fields.put("position", "string");
+            fields.put("salary", "number");
+            fields.put("createdAt", "date");
+            fields.put("updatedAt", "date");
+            basicSchema.put("fields", fields);
+            basicSchema.put("createdAt", new Date());
+            basicSchema.put("description", "Template added during rename from " + currentName + " to " + newName);
+            mongoTemplate.insert(basicSchema, newColl);
         }
 
         // update admin users that reference old org name
@@ -119,6 +201,12 @@ public class OrganizationService {
         return saved;
     }
 
+    /**
+     * Delete an organization:
+     * - drop tenant collection
+     * - delete admin(s) for that org from master_admins
+     * - delete the organization metadata
+     */
     public void deleteOrganization(String orgName) {
         OrganizationMetadata meta = orgRepo.findByOrganizationName(orgName)
                 .orElseThrow(() -> new IllegalArgumentException("organization not found"));
