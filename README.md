@@ -10,35 +10,34 @@
 
 ```mermaid
 graph TD
-  %% Clients & Edge
-  A["Clients\n(Web / Mobile / Postman)"] -->|HTTP| B["API Gateway / Load Balancer"]
-
-  %% Application
-  B --> C["Organization Service\n(Spring Boot)"]
-  subgraph AppComponents
-    C1[Controllers] 
-    C2["JWT Filter / Auth"]
-    C3["OrgService & TenantService"]
-    C4[Repositories]
-    C5["Postman / Tests"]
-  end
-  C --> C1
-  C1 --> C2
-  C1 --> C3
-  C3 --> C4
-
-  %% Databases
-  C -->|master metadata queries| M["MongoDB - Master DB\n(master_organizations,\nmaster_admins)"]
-  C -->|tenant queries| T["MongoDB - Tenant Collections\n(org_<name>, seeded template)"]
-
-  %% Optional / infra
-  B --> D["Monitoring & Logs\n(Prometheus / Grafana)"]
-  C --> E["Optional: Redis / Cache"]
-  C --> F["Optional: Object Storage (S3)"]
-
-  %% Notes
-  classDef infra fill:#f9f9f9,stroke:#ddd;
-  class M,T,D,E,F infra;
+    %% Nodes
+    User[Client / Postman]
+    API[Spring Boot API Server]
+    Auth{Is JWT Valid?}
+    Router{Controller Handler}
+    
+    %% Databases
+    AdminDB[(Admin Collection)]
+    MasterDB[(Organization Metadata)]
+    
+    %% Dynamic Collections
+    Switch{Which Organization?}
+    CollA[(Collection: org_microsoft)]
+    CollB[(Collection: org_google)]
+    
+    %% Connections
+    User -->|1. Request| API
+    API -->|2. Verify JWT| Auth
+    
+    Auth -->|No| Error[Error: 401 Unauthorized]
+    Auth -->|Yes| Router
+    
+    Router -->|Admin Login| AdminDB
+    Router -->|Org Create/Get/Update/Delete| MasterDB
+    
+    Router -->|3. Employee CRUD| Switch
+    Switch -->|Microsoft| CollA
+    Switch -->|Google| CollB
 ```
 
 ---
