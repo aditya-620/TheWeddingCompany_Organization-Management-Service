@@ -11,16 +11,16 @@
 ```mermaid
 graph TD
   %% Clients & Edge
-  A[Clients<br/>(Web / Mobile / Postman)] -->|HTTP| B[API Gateway / Load Balancer]
+  A["Clients\n(Web / Mobile / Postman)"] -->|HTTP| B["API Gateway / Load Balancer"]
 
   %% Application
-  B --> C[Organization Service<br/>(Spring Boot)]
+  B --> C["Organization Service\n(Spring Boot)"]
   subgraph AppComponents
     C1[Controllers] 
-    C2[JWT Filter / Auth]
-    C3[OrgService & TenantService]
+    C2["JWT Filter / Auth"]
+    C3["OrgService & TenantService"]
     C4[Repositories]
-    C5[Postman / Tests]
+    C5["Postman / Tests"]
   end
   C --> C1
   C1 --> C2
@@ -28,13 +28,13 @@ graph TD
   C3 --> C4
 
   %% Databases
-  C -->|master metadata queries| M[MongoDB - Master DB<br/>(master_organizations,<br/>master_admins)]
-  C -->|tenant queries| T[MongoDB - Tenant Collections<br/>(org_<name>, seeded template)]
+  C -->|master metadata queries| M["MongoDB - Master DB\n(master_organizations,\nmaster_admins)"]
+  C -->|tenant queries| T["MongoDB - Tenant Collections\n(org_<name>, seeded template)"]
 
   %% Optional / infra
-  B --> D[Monitoring & Logs<br/>(Prometheus / Grafana)]
-  C --> E[Optional: Redis / Cache]
-  C --> F[Optional: Object Storage (S3)]
+  B --> D["Monitoring & Logs\n(Prometheus / Grafana)"]
+  C --> E["Optional: Redis / Cache"]
+  C --> F["Optional: Object Storage (S3)"]
 
   %% Notes
   classDef infra fill:#f9f9f9,stroke:#ddd;
@@ -193,22 +193,6 @@ mvn spring-boot:run
 
   * Body JSON: `{ "email": "admin@microsoft.com", "password": "Admin@1234" }`
   * Returns `{ "token": "<JWT>" }`.
-
-### Tenant (employee CRUD) — multi-tenant routing by JWT claim
-
-All tenant endpoints require `Authorization: Bearer <JWT>` where JWT contains the `organization` claim.
-
-* `POST /tenant/employees` — create employee
-
-  * Body JSON: `{ "name":"Alice","email":"alice@example.com","position":"SE","salary":120000 }`
-
-* `GET /tenant/employees` — list employees
-
-* `GET /tenant/employees/{id}` — get single employee
-
-* `PUT /tenant/employees/{id}` — update employee
-
-* `DELETE /tenant/employees/{id}` — delete employee (requires role `ADMIN` in token)
 
 ---
 
