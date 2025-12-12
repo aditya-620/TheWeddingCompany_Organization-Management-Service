@@ -202,6 +202,34 @@ public class OrganizationService {
     }
 
     /**
+     * Update organization details: update admin email and password for the organization.
+     */
+    public OrganizationMetadata updateOrganization(String orgName, String newEmail, String newPassword) {
+        if (orgName == null || orgName.isBlank()) {
+            throw new IllegalArgumentException("organization name required");
+        }
+        if (newEmail == null || newEmail.isBlank()) {
+            throw new IllegalArgumentException("email required");
+        }
+        if (newPassword == null || newPassword.isBlank()) {
+            throw new IllegalArgumentException("password required");
+        }
+
+        OrganizationMetadata meta = orgRepo.findByOrganizationName(orgName)
+                .orElseThrow(() -> new IllegalArgumentException("organization not found: " + orgName));
+
+        // Find and update the admin user
+        AdminUser admin = adminRepo.findByOrganizationName(orgName)
+                .orElseThrow(() -> new IllegalArgumentException("admin not found for organization: " + orgName));
+
+        admin.setEmail(newEmail);
+        admin.setPasswordHash(passwordEncoder.encode(newPassword));
+        adminRepo.save(admin);
+
+        return meta;
+    }
+
+    /**
      * Delete an organization:
      * - drop tenant collection
      * - delete admin(s) for that org from master_admins
