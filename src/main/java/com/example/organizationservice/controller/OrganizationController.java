@@ -45,9 +45,10 @@ public class OrganizationController {
     @PutMapping("/update")
     public ResponseEntity<?> updateOrganization(@RequestBody UpdateOrgRequest req) {
         try {
-            OrganizationMetadata updated = orgService.updateOrganizationName(
+            OrganizationMetadata updated = orgService.updateOrganization(
                     req.getOrganization_name(),
-                    req.getNew_organization_name()
+                    req.getEmail(),
+                    req.getPassword()
             );
             return ResponseEntity.ok(updated);
         } catch (IllegalArgumentException iae) {
